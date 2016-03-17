@@ -14,7 +14,9 @@ module Vagrant
     class Downloader
       # Custom user agent provided to cURL so that requests to URL shorteners
       # are properly tracked.
-      USER_AGENT = "Vagrant/#{VERSION}"
+      #
+      #     Vagrant/1.7.4 (+https://www.vagrantup.com; ruby2.1.0)
+      USER_AGENT = "Vagrant/#{VERSION} (+https://www.vagrantup.com; #{RUBY_ENGINE}#{RUBY_VERSION})".freeze
 
       attr_reader :source
       attr_reader :destination
@@ -29,8 +31,8 @@ module Vagrant
         begin
           url = URI.parse(@source)
           if url.scheme && url.scheme.start_with?("http") && url.user
-            auth = "#{url.user}"
-            auth += ":#{url.password}" if url.password
+            auth = "#{URI.unescape(url.user)}"
+            auth += ":#{URI.unescape(url.password)}" if url.password
             url.user = nil
             url.password = nil
             options[:auth] ||= auth
@@ -49,6 +51,7 @@ module Vagrant
         @insecure    = options[:insecure]
         @ui          = options[:ui]
         @client_cert = options[:client_cert]
+        @location_trusted = options[:location_trusted]
       end
 
       # This executes the actual download, downloading the source file
@@ -135,11 +138,14 @@ module Vagrant
           # If we already retried, raise it.
           raise if retried
 
+          @logger.error("Exit code: #{e.extra_data[:code]}")
+
           # If its any error other than 33, it is an error.
-          raise if e.extra_data[:exit_code].to_i != 33
+          raise if e.extra_data[:code].to_i != 33
 
           # Exit code 33 means that the server doesn't support ranges.
           # In this case, try again without resume.
+          @logger.error("Error is server doesn't support byte ranges. Retrying from scratch.")
           @continue = false
           retried = true
           retry
@@ -224,6 +230,7 @@ module Vagrant
         options << "--insecure" if @insecure
         options << "--cert" << @client_cert if @client_cert
         options << "-u" << @auth if @auth
+        options << "--location-trusted" if @location_trusted
 
         if @headers
           Array(@headers).each do |header|

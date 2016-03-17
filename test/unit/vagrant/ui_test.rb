@@ -40,22 +40,42 @@ describe Vagrant::UI::Basic do
       subject.output("foo", new_line: false)
     end
 
-    it "outputs to stdout" do
+    it "outputs to the assigned stdout" do
+      stdout = StringIO.new
+      subject.stdout = stdout
+
       expect(subject).to receive(:safe_puts).with { |message, **opts|
-        expect(opts[:io]).to be($stdout)
+        expect(opts[:io]).to be(stdout)
         true
       }
 
       subject.output("foo")
     end
 
-    it "outputs to stderr for errors" do
+    it "outputs to stdout by default" do
+      expect(subject.stdout).to be($stdout)
+    end
+
+    it "outputs to the assigned stderr for errors" do
+      stderr = StringIO.new
+      subject.stderr = stderr
+
       expect(subject).to receive(:safe_puts).with { |message, **opts|
-        expect(opts[:io]).to be($stderr)
+        expect(opts[:io]).to be(stderr)
         true
       }
 
       subject.error("foo")
+    end
+
+    it "outputs to stderr for errors by default" do
+      expect(subject.stderr).to be($stderr)
+    end
+  end
+
+  context "#color?" do
+    it "returns false" do
+      expect(subject.color?).to be(false)
     end
   end
 
@@ -80,6 +100,12 @@ end
 
 describe Vagrant::UI::Colored do
   include_context "unit"
+
+  describe "#color?" do
+    it "returns true" do
+      expect(subject.color?).to be(true)
+    end
+  end
 
   describe "#detail" do
     it "colors output nothing by default" do
@@ -189,6 +215,24 @@ describe Vagrant::UI::MachineReadable do
     end
   end
 
+  [:detail, :warn, :error, :info, :output, :success].each do |method|
+    describe "##{method}" do
+      it "outputs UI type to the machine-readable output" do
+        expect(subject).to receive(:safe_puts).with { |message|
+          parts = message.split(",")
+          expect(parts.length).to eq(5)
+          expect(parts[1]).to eq("")
+          expect(parts[2]).to eq("ui")
+          expect(parts[3]).to eq(method.to_s)
+          expect(parts[4]).to eq("foo")
+          true
+        }
+
+        subject.send(method, "foo")
+      end
+    end
+  end
+
   describe "#machine" do
     it "is formatted properly" do
       expect(subject).to receive(:safe_puts).with { |message|
@@ -269,7 +313,7 @@ describe Vagrant::UI::Prefixed do
 
   describe "#ask" do
     it "does not request bolding" do
-      expect(ui).to receive(:ask).with("    #{prefix}: foo", bold: false)
+      expect(ui).to receive(:ask).with("    #{prefix}: foo", bold: false, target: prefix)
       subject.ask("foo")
     end
   end
@@ -281,12 +325,13 @@ describe Vagrant::UI::Prefixed do
     end
 
     it "prefixes every line" do
-      expect(ui).to receive(:detail).with("    #{prefix}: foo\n    #{prefix}: bar", bold: false)
+      expect(ui).to receive(:detail).with(
+        "    #{prefix}: foo\n    #{prefix}: bar", bold: false, target: prefix)
       subject.detail("foo\nbar")
     end
 
     it "doesn't prefix if requested" do
-      expect(ui).to receive(:detail).with("foo", prefix: false, bold: false)
+      expect(ui).to receive(:detail).with("foo", prefix: false, bold: false, target: prefix)
       subject.detail("foo", prefix: false)
     end
   end
@@ -327,18 +372,18 @@ describe Vagrant::UI::Prefixed do
     end
 
     it "doesn't prefix if requestsed" do
-      expect(ui).to receive(:output).with("foo", prefix: false, bold: true)
+      expect(ui).to receive(:output).with("foo", prefix: false, bold: true, target: prefix)
       subject.output("foo", prefix: false)
     end
 
     it "requests bolding" do
-      expect(ui).to receive(:output).with("==> #{prefix}: foo", bold: true)
+      expect(ui).to receive(:output).with("==> #{prefix}: foo", bold: true, target: prefix)
       subject.output("foo")
     end
 
     it "does not request bolding if class-level disabled" do
       ui.opts[:bold] = false
-      expect(ui).to receive(:output).with("==> #{prefix}: foo", {})
+      expect(ui).to receive(:output).with("==> #{prefix}: foo", target: prefix)
       subject.output("foo")
     end
 

@@ -1,3 +1,4 @@
+require "vagrant/util/presence"
 require "vagrant/util/which"
 
 require_relative "base_runner"
@@ -6,6 +7,8 @@ module VagrantPlugins
   module Chef
     module Config
       class ChefClient < BaseRunner
+        include Vagrant::Util::Presence
+
         # The URL endpoint to the Chef Server.
         # @return [String]
         attr_accessor :chef_server_url
@@ -45,7 +48,7 @@ module VagrantPlugins
           super
 
           @chef_server_url        = nil if @chef_server_url == UNSET_VALUE
-          @client_key_path        = "/etc/chef/client.pem" if @client_key_path == UNSET_VALUE
+          @client_key_path        = nil if @client_key_path == UNSET_VALUE
           @delete_client          = false if @delete_client == UNSET_VALUE
           @delete_node            = false if @delete_node == UNSET_VALUE
           @validation_client_name = "chef-validator" if @validation_client_name == UNSET_VALUE
@@ -55,18 +58,12 @@ module VagrantPlugins
         def validate(machine)
           errors = validate_base(machine)
 
-          if chef_server_url.to_s.strip.empty?
+          if !present?(chef_server_url)
             errors << I18n.t("vagrant.config.chef.server_url_empty")
           end
 
-          if validation_key_path.to_s.strip.empty?
+          if !present?(validation_key_path)
             errors << I18n.t("vagrant.config.chef.validation_key_path")
-          end
-
-          if delete_client || delete_node
-            if !Vagrant::Util::Which.which("knife")
-              errors << I18n.t("vagrant.chef_config_knife_not_found")
-            end
           end
 
           { "chef client provisioner" => errors }

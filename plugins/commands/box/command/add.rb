@@ -1,9 +1,13 @@
 require 'optparse'
 
+require_relative 'download_mixins'
+
 module VagrantPlugins
   module CommandBox
     module Command
       class Add < Vagrant.plugin("2", :command)
+        include DownloadMixins
+
         def execute
           options = {}
 
@@ -21,21 +25,10 @@ module VagrantPlugins
               options[:force] = f
             end
 
-            o.on("--insecure", "Do not validate SSL certificates") do |i|
-              options[:insecure] = i
-            end
+            build_download_options(o, options)
 
-            o.on("--cacert FILE", String, "CA certificate for SSL download") do |c|
-              options[:ca_cert] = c
-            end
-
-            o.on("--capath DIR", String, "CA certificate directory for SSL download") do |c|
-              options[:ca_path] = c
-            end
-
-            o.on("--cert FILE", String,
-                 "A client SSL cert, if needed") do |c|
-              options[:client_cert] = c
+            o.on("--location-trusted", "Trust 'Location' header from HTTP redirects and use the same credentials for subsequent urls as for the initial one") do |l|
+                options[:location_trusted] = l
             end
 
             o.on("--provider PROVIDER", String, "Provider the box should satisfy") do |p|
@@ -93,8 +86,9 @@ module VagrantPlugins
             box_force: options[:force],
             box_download_ca_cert: options[:ca_cert],
             box_download_ca_path: options[:ca_path],
-            box_download_client_cert: options[:client_cert],
+            box_client_cert: options[:client_cert],
             box_download_insecure: options[:insecure],
+            box_download_location_trusted: options[:location_trusted],
             ui: Vagrant::UI::Prefixed.new(@env.ui, "box"),
           })
 

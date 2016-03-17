@@ -117,6 +117,14 @@ module VagrantPlugins
         nics
       end
 
+       def net_set_vlan(vlan_id)
+          execute("set_network_vlan.ps1", { VmId: vm_id, VlanId: vlan_id })
+       end
+
+       def net_set_mac(mac_addr)
+          execute("set_network_mac.ps1", { VmId: vm_id, Mac: mac_addr })
+       end
+       
       protected
 
       def execute_powershell(path, options, &block)

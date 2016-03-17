@@ -77,15 +77,27 @@ else {
     }
 }
 
-# Determine boot device
-Switch ((Select-Xml -xml $vmconfig -XPath "//boot").node.device0."#text") {
-    "Floppy"    { $bootdevice = "floppy" }
-    "HardDrive" { $bootdevice = "IDE" }
-    "Optical"   { $bootdevice = "CD" }
-    "Network"   { $bootdevice = "LegacyNetworkAdapter" }
-    "VHD"       { $bootdevice = "VHD" }
-    "Default"   { $bootdevice = "IDE" }
-} #switch
+
+if ($generation -eq 1) {
+    # Determine boot device
+    Switch ((Select-Xml -xml $vmconfig -XPath "//boot").node.device0."#text") {
+        "Floppy"    { $bootdevice = "Floppy" }
+        "HardDrive" { $bootdevice = "IDE" }
+        "Optical"   { $bootdevice = "CD" }
+        "Network"   { $bootdevice = "LegacyNetworkAdapter" }
+        "VHD"       { $bootdevice = "VHD" }
+        "Default"   { $bootdevice = "IDE" }
+    } #switch
+} else {
+    # Determine boot device
+    Switch ((Select-Xml -xml $vmconfig -XPath "//boot").node.device0."#text") {
+        "HardDrive" { $bootdevice = "VHD" }
+        "Optical"   { $bootdevice = "CD" }
+        "Network"   { $bootdevice = "NetworkAdapter" }
+        "VHD"       { $bootdevice = "VHD" }
+        "Default"   { $bootdevice = "VHD" }
+    } #switch
+}
 
 # Determine secure boot options
 $secure_boot_enabled = (Select-Xml -xml $vmconfig -XPath "//secure_boot_enabled").Node."#text"
@@ -94,11 +106,15 @@ $secure_boot_enabled = (Select-Xml -xml $vmconfig -XPath "//secure_boot_enabled"
 
 $vm_params = @{
     Name = $vm_name
-    Generation = $generation
     NoVHD = $True
     MemoryStartupBytes = $MemoryStartupBytes
     BootDevice = $bootdevice
     ErrorAction = "Stop"
+}
+
+# Generation parameter was added in ps v4
+if((get-command New-VM).Parameters.Keys.Contains("generation")) {
+    $vm_params.Generation = $generation
 }
 
 # Create the VM using the values in the hash map

@@ -116,6 +116,9 @@ module Vagrant
       # XXX: This is temporary. This will be removed very soon.
       if base
         @id = name
+
+        # For base setups, we don't want to insert the key
+        @config.ssh.insert_key = false
       else
         reload
       end
@@ -141,6 +144,10 @@ module Vagrant
       if state.id == MachineState::NOT_CREATED_ID
         self.id = nil
       end
+
+      # Output a bunch of information about this machine in
+      # machine-readable format in case someone is listening.
+      @ui.machine("metadata", "provider", provider_name)
     end
 
     # This calls an action on the provider. The provider may or may not
@@ -166,7 +173,7 @@ module Vagrant
       vf = nil
       vf = @env.vagrantfile_name[0] if @env.vagrantfile_name
       id = Digest::MD5.hexdigest(
-        "#{@env.root_path}#{vf}#{@name}")
+        "#{@env.root_path}#{vf}#{@env.local_data_path}#{@name}")
 
       # We only lock if we're not executing an SSH action. In the future
       # we will want to do more fine-grained unlocking in actions themselves
@@ -188,7 +195,10 @@ module Vagrant
         end
 
         # Call the action
-        action_raw(name, callable, extra_env)
+        ui.machine("action", name.to_s, "start")
+        action_result = action_raw(name, callable, extra_env)
+        ui.machine("action", name.to_s, "end")
+        action_result
       end
     rescue Errors::EnvironmentLockedError
       raise Errors::MachineActionLockedError,
@@ -279,6 +289,13 @@ module Vagrant
           end
         end
 
+        if uid_file
+          # Write the user id that created this machine
+          uid_file.open("w+") do |f|
+            f.write(Process.uid.to_s)
+          end
+        end
+
         # If we don't have a UUID, then create one
         if index_uuid.nil?
           # Create the index entry and save it
@@ -311,6 +328,7 @@ module Vagrant
       else
         # Delete the file, since the machine is now destroyed
         id_file.delete if id_file && id_file.file?
+        uid_file.delete if uid_file && uid_file.file?
 
         # If we have a UUID associated with the index, remove it
         uuid = index_uuid
@@ -428,6 +446,9 @@ module Vagrant
       # We also set some fields that are purely controlled by Varant
       info[:forward_agent] = @config.ssh.forward_agent
       info[:forward_x11]   = @config.ssh.forward_x11
+      info[:forward_env]   = @config.ssh.forward_env
+
+      info[:ssh_command] = @config.ssh.ssh_command if @config.ssh.ssh_command
 
       # Add in provided proxy command config
       info[:proxy_command] = @config.ssh.proxy_command if @config.ssh.proxy_command
@@ -444,7 +465,7 @@ module Vagrant
       end
 
       # If we have a private key in our data dir, then use that
-      if @data_dir
+      if @data_dir && !@config.ssh.private_key_path
         data_private_key = @data_dir.join("private_key")
         if data_private_key.file?
           info[:private_key_path] = [data_private_key.to_s]
@@ -495,6 +516,17 @@ module Vagrant
       result
     end
 
+    # Returns the user ID that created this machine. This is specific to
+    # the host machine that this was created on.
+    #
+    # @return [String]
+    def uid
+      path = uid_file
+      return nil if !path
+      return nil if !path.file?
+      return uid_file.read.chomp
+    end
+
     # Temporarily changes the machine UI. This is useful if you want
     # to execute an {#action} with a different UI.
     def with_ui(ui)
@@ -507,6 +539,14 @@ module Vagrant
           @ui = old_ui
         end
       end
+    end
+
+    protected
+
+    # Returns the path to the file that stores the UID.
+    def uid_file
+      return nil if !@data_dir
+      @data_dir.join("creator_uid")
     end
   end
 end

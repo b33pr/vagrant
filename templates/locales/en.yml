@@ -20,10 +20,14 @@ en:
       Adding box '%{name}' (v%{version}) for provider: %{providers}
     box_added: |-
       Successfully added box '%{name}' (v%{version}) for '%{provider}'!
+    box_adding_direct: |-
+      Box file was not detected as metadata. Adding it directly...
     box_downloading: |-
       Downloading: %{url}
     box_download_error: |-
       Error downloading: %{message}
+    box_unpacking: |-
+      Unpacking necessary files from: %{url}
     box_expanding_url: |-
       URL: %{url}
     box_loading_metadata: |-
@@ -119,11 +123,8 @@ en:
       installed and attempt to continue.
     docker_configure_autostart: |-
       Configuring Docker to autostart containers...
-    docker_install_with_version_not_supported: |-
-      Vagrant is not capable of installing an specific version of Docker
-      onto the guest machine and the latest version will be installed.
     docker_installing: |-
-      Installing Docker (%{version}) onto machine...
+      Installing Docker onto machine...
     docker_pulling_images:
       Pulling Docker images...
     docker_pulling_single: |-
@@ -134,7 +135,9 @@ en:
       Building Docker images...
     docker_running: |-
       -- Container: %{name}
-    docker_starting_containers:
+    docker_restarting_container: |-
+      -- Detected changes to container '%{name}', restarting...
+    docker_starting_containers: |-
       Starting Docker containers...
     inserted_key: |-
       Key inserted! Disconnecting and reconnecting using new SSH key...
@@ -145,11 +148,20 @@ en:
       Inserting generated public key within guest...
     inserting_remove_key: |-
       Removing insecure key from the guest if it's present...
+    installing_provider: |-
+      Provider '%{provider}' not found. We'll automatically install it now...
+    installing_provider_detail: |-
+      The installation process will start below. Human interaction may be
+      required at some points. If you're uncomfortable with automatically
+      installing this provider, you can safely Ctrl-C this process and install
+      it manually.
     list_commands: |-
       Below is a listing of all available Vagrant commands and a brief
       description of what they do.
 
       %{list}
+    guest_deb_installing_smb: |-
+      Installing SMB "mount.cifs"...
     global_status_footer: |-
       The above shows information about all known Vagrant environments
       on this machine. This data is cached and may not be completely
@@ -197,6 +209,12 @@ en:
       have specified `rsync_auto` to be false.
     rsync_auto_path: |-
       Watching: %{path}
+    rsync_auto_rsync_error: |-
+      There was an error while executing rsync. The error is shown below.
+      This may not be critical since rsync sometimes fails, but if this message
+      repeats, then please fix the issue:
+
+      %{message}
     rsync_communicator_not_ready: |-
       The machine is reporting that it is not ready for rsync to
       communicate with it. Verify that this machine is properly running.
@@ -212,6 +230,7 @@ en:
       The provider ('%{provider}') for the machine '%{name}' is
       using a proxy machine. RSync will sync to this proxy
       instead of directly to the environment itself.
+    rsync_showing_output: "Showing rsync output..."
     rsync_ssh_password: |-
       The machine you're rsyncing folders to is configured to use
       password-based authentication. Vagrant can't script rsync to automatically
@@ -252,18 +271,19 @@ en:
       You're running an up-to-date version of Vagrant!
     version_no_checkpoint: |-
       Vagrant was unable to check for the latest version of Vagrant.
-      Please check manually at http://www.vagrantup.com
+      Please check manually at https://www.vagrantup.com
     version_upgrade_howto: |-
       To upgrade to the latest version, visit the downloads page and
       download and install the latest version of Vagrant from the URL
       below:
 
-        http://www.vagrantup.com/downloads.html
+        https://www.vagrantup.com/downloads.html
 
       If you're curious what changed in the latest release, view the
       CHANGELOG below:
 
         https://github.com/mitchellh/vagrant/blob/v%{version}/CHANGELOG.md
+
     cfengine_config:
       classes_array: |-
         The 'classes' configuration must be an array.
@@ -347,17 +367,6 @@ en:
         Machine name: %{name}
         Active provider: %{active_provider}
         Requested provider: %{requested_provider}
-      ansible_failed: |-
-        Ansible failed to complete successfully. Any error output should be
-        visible above. Please fix these errors and try again.
-      ansible_playbook_app_not_found: |-
-        The "ansible-playbook" program could not be found! Please verify
-        that "ansible-playbook" is available on the PATH of your host
-        system, and try again.
-
-        If you haven't installed Ansible yet, please install Ansible
-        on your system. Vagrant can't do this for you in a safe, automated
-        way. Please see ansible.cc for more info.
       batch_multi_error: |-
         An error occurred while executing multiple actions in parallel.
         Any errors that occurred are shown below.
@@ -379,7 +388,7 @@ en:
         The box you're attempting to add has no available version that
         matches the constraints you requested. Please double-check your
         settings. Also verify that if you specified version constraints,
-        that the provider you wish to use is available for these constriants.
+        that the provider you wish to use is available for these constraints.
 
         Box: %{name}
         Address: %{url}
@@ -405,6 +414,9 @@ en:
         GUI often has more helpful error messages than Vagrant can retrieve.
         For example, if you're using VirtualBox, run `vagrant up` while the
         VirtualBox GUI is open.
+
+        The primary issue for this error is that the provider you're using
+        is not properly configured. This is very rarely a Vagrant issue.
       boot_timeout: |-
         Timed out while waiting for the machine to boot. This means that
         Vagrant was unable to communicate with the guest machine within
@@ -488,7 +500,7 @@ en:
         notify the box creator that the box is corrupt. Documentation for
         box file format can be found at the URL below:
 
-        http://docs.vagrantup.com/v2/boxes/format.html
+        https://www.vagrantup.com/docs/boxes/format.html
       box_metadata_malformed: |-
         The metadata for the box was malformed. The exact error
         is shown below. Please contact the maintainer of the box so
@@ -529,8 +541,8 @@ en:
         You requested to remove the box '%{name}' with provider
         '%{provider}'. This box has multiple versions. You must
         explicitly specify which version you want to remove with
-        the `--box-version` flag. The available versions for this
-        box are:
+        the `--box-version` flag or specify the `--all` flag to remove all
+        versions. The available versions for this box are:
 
         %{versions}
       box_remove_not_found: |-
@@ -587,6 +599,14 @@ en:
         issues. The error from Bundler is:
 
         %{message}
+      cant_read_mac_addresses: |-
+        The provider you are using  ('%{provider}') doesn't support the
+        "nic_mac_addresses" provider capability which is required
+        for advanced networking to work with this guest OS. Please inform
+        the author of the provider to add this feature.
+
+        Until then, you must remove any networking configurations other
+        than forwarded ports from your Vagrantfile for Vagrant to continue.
       capability_host_explicit_not_detected: |-
         The explicit capability host specified of '%{value}' could not be
         found.
@@ -631,6 +651,17 @@ en:
         available below.
 
         %{help}
+      clone_not_found: |-
+        The specified Vagrantfile to clone from was not found. Please verify
+        the `config.vm.clone` setting points to a valid Vagrantfile.
+      clone_machine_not_found: |-
+        The clone environment hasn't been created yet. To clone from
+        another Vagrantfile, it must already be created with `vagrant up`.
+        It doesn't need to be running.
+
+        Additionally, the created environment must be started with a provider
+        matching this provider. For example, if you're using VirtualBox,
+        the clone environment must also be using VirtualBox.
       command_unavailable: |-
         The executable '%{file}' Vagrant is trying to run was not
         found in the PATH variable. This is an error. Please verify
@@ -701,6 +732,13 @@ en:
       downloader_interrupted: |-
         The download was interrupted by an external signal. It did not
         complete.
+      env_inval: |-
+        Vagrant received an "EINVAL" error while attempting to set some
+        environment variables. This is usually caused by the total size of your
+        environment variables being too large. Vagrant sets a handful of
+        environment variables to function and requires this to work. Please
+        delete some environment variables prior to executing Vagrant to
+        fix this.
       environment_locked: |-
         Vagrant attempted to acquire a lock named '%{name}', but this
         lock is being held by another instance of Vagrant already. Please
@@ -788,10 +826,11 @@ en:
         that the NFS client software is properly installed, and consult any resources
         specific to the linux distro you're using for more information on how to
         do this.
-      linux_rdesktop_not_found: |-
-        The `rdesktop` application was not found. Vagrant requires this
-        in order to connect via RDP to the Vagrant environment. Please ensure
-        this application is installed and available on the path and try again.
+      linux_rdp_client_not_found: |-
+        An appropriate RDP client was not found. Vagrant requires either
+        `xfreerdp` or `rdesktop` in order to connect via RDP to the Vagrant
+        environment. Please ensure one of these applications is installed and
+        available on the path and try again.
       machine_action_locked: |-
         An action '%{action}' was attempted on the machine '%{name}',
         but another process is already executing an action on the machine.
@@ -971,6 +1010,26 @@ en:
         A file or directory you're attempting to include with your packaged
         box has symlinks in it. Vagrant cannot include symlinks in the
         resulting package. Please remove the symlinks and try again.
+      provider_cant_install: |-
+        The provider '%{provider}' doesn't support automatic installation.
+        This is a limitation of this provider. Please report this as a feature
+        request to the provider in question. To install this provider, you'll
+        have to do so manually.
+      provider_checksum_mismatch: |-
+        The checksum of the downloaded provider '%{provider}' did not match the
+        expected value. If the problem persists, please install the provider
+        manually.
+
+        Expected: %{expected}
+        Received: %{actual}
+      provider_install_failed: |-
+        Installation of the provider '%{provider}' failed! The stdout
+        and stderr are shown below. Please read the error output, resolve it,
+        and try again. If problem persists, please install the provider
+        manually.
+
+        Stdout: %{stdout}
+        Stderr: %{stderr}
       provider_not_found: |-
         The provider '%{provider}' could not be found, but was requested to
         back the machine '%{machine}'. Please use a provider that exists.
@@ -1139,6 +1198,13 @@ en:
         permissions on the following file to 0600 and then try running this command again:
 
         %{key_path}
+
+        Note that this error occurs after Vagrant automatically tries to
+        do this for you. The likely cause of this error is a lack of filesystem
+        permissions or even filesystem functionality. For example, if your
+        Vagrant data is on a USB stick, a common case is that chmod is
+        not supported. The key will need to be moved to a filesystem that
+        supports chmod.
       ssh_key_type_not_supported: |-
         The private key you're attempting to use with this Vagrant box uses
         an unsupported encryption type. The SSH library Vagrant uses does not support
@@ -1197,7 +1263,8 @@ en:
         a syntax error.
 
         Path: %{path}
-        Message: %{message}
+        Line number: %{line}
+        Message: %{exception_class}: %{message}
       vagrantfile_syntax_error: |-
         There is a syntax error in the following Vagrantfile. The syntax error
         message is reproduced below for convenience:
@@ -1227,6 +1294,13 @@ en:
         Command: %{command}
 
         Stderr: %{stderr}
+      vboxmanage_launch_error: |-
+        There was an error running VBoxManage. This is usually a permissions
+        problem or installation problem with VirtualBox itself, and not Vagrant.
+        Please note the error message below (if any), resolve the issue, and
+        try Vagrant again.
+
+        %{message}
       vboxmanage_not_found_error: |-
         The "VBoxManage" command or one of its dependencies could not
         be found. Please verify VirtualBox is properly installed. You can verify
@@ -1248,10 +1322,14 @@ en:
         This is an internal error that should be reported as a bug.
       virtualbox_invalid_version: |-
         Vagrant has detected that you have a version of VirtualBox installed
-        that is not supported. Please install one of the supported versions
-        listed below to use Vagrant:
+        that is not supported by this version of Vagrant. Please install one of
+        the supported versions listed below to use Vagrant:
 
         %{supported_versions}
+
+        A Vagrant update may also be available that adds support for the version
+        you specified. Please check www.vagrantup.com/downloads.html to download
+        the latest version.
       virtualbox_kernel_module_not_loaded: |-
         VirtualBox is complaining that the kernel module is not loaded. Please
         run `VBoxManage --version` or open the VirtualBox GUI to see the error
@@ -1294,6 +1372,14 @@ en:
         Vagrant uses the `VBoxManage` binary that ships with VirtualBox, and requires
         this to be available on the PATH. If VirtualBox is installed, please find the
         `VBoxManage` binary and add it to the PATH environmental variable.
+      virtualbox_user_mismatch: |-
+        The VirtualBox VM was created with a user that doesn't match the
+        current user running Vagrant. VirtualBox requires that the same user
+        be used to manage the VM that was created. Please re-run Vagrant with
+        that user. This is not a Vagrant issue.
+
+        The UID used to create the VM was: %{original_uid}
+        Your UID is: %{uid}
       virtualbox_version_empty: |-
         Vagrant detected that VirtualBox appears installed on your system,
         but calls to detect the version are returning empty. This is often
@@ -1330,7 +1416,10 @@ en:
       common:
         bad_field: "The following settings shouldn't exist: %{fields}"
       chef:
-        cookbooks_path_empty: "Must specify a cookbooks path for chef solo."
+        cookbooks_path_empty: |-
+          Missing required value for `chef.cookbooks_path'.
+        nodes_path_empty: |-
+          Missing required value for `chef.nodes_path'.
         environment_path_missing: |-
           Environment path not found: %{path}
         environment_path_required: |-
@@ -1362,6 +1451,7 @@ en:
         box_download_checksum_notblank: |-
           Checksum specified but must also specify "box_download_checksum_type"
         box_missing: "A box must be specified."
+        clone_and_box: "Only one of clone or box can be specified."
         hostname_invalid_characters: |-
           The hostname set for the VM should only contain letters, numbers,
           hyphens or dots. It cannot start with a hyphen or dot.
@@ -1459,6 +1549,17 @@ en:
           Post install message from the '%{name}' plugin:
 
           %{message}
+      snapshot:
+        not_supported: |-
+          This provider doesn't support snapshots.
+
+          This may be intentional or this may be a bug. If this provider
+          should support snapshots, then please report this as a bug to the
+          maintainer of the provider.
+        no_push_snapshot: |-
+          No pushed snapshot found!
+
+          Use `vagrant snapshot push` to push a snapshot to restore to.
       status:
         aborted: |-
           The VM is in an aborted state. This means that it was abruptly
@@ -1576,6 +1677,17 @@ en:
           deleting: Clearing any previously set network interfaces...
         clear_shared_folders:
           deleting: Cleaning previously set shared folders...
+        clone:
+          setup_master: Preparing master VM for linked clones...
+          setup_master_detail: |-
+            This is a one time operation. Once the master VM is prepared,
+            it will be used as a base for linked clones, making the creation
+            of new VMs take milliseconds on a modern system.
+          creating: Cloning VM...
+          failure: Creation of the linked clone failed.
+          create_master:
+            failure: |-
+              Failed to create lock-file for master VM creation for box %{box}.
         customize:
           failure: |-
             A customization command failed:
@@ -1614,7 +1726,7 @@ en:
             on these ports. The forwarded port to %{host_port} is already in use
             on the host machine.
 
-            To fix this, modify your current projects Vagrantfile to use another
+            To fix this, modify your current project's Vagrantfile to use another
             port. Example, where '1234' would be replaced by a unique host port:
 
               config.vm.network :forwarded_port, guest: %{guest_port}, host: 1234
@@ -1626,7 +1738,7 @@ en:
             Fixed port collision for %{guest_port} => %{host_port}. Now on port %{new_port}.
           forwarding: Forwarding ports...
           forwarding_entry: |-
-            %{guest_port} => %{host_port} (adapter %{adapter})
+            %{guest_port} (guest) => %{host_port} (host) (adapter %{adapter})
           non_nat: |-
             VirtualBox adapter #%{adapter} not configured as "NAT". Skipping port
             forwards on this adapter.
@@ -1696,10 +1808,10 @@ en:
         provision:
           beginning: "Running provisioner: %{provisioner}..."
           disabled_by_config: |-
-            Machine not provisioning because `--no-provision` is specified.
+            Machine not provisioned because `--no-provision` is specified.
           disabled_by_sentinel: |-
             Machine already provisioned. Run `vagrant provision` or use the `--provision`
-            to force provisioning. Provisioners marked to run always will still run.
+            flag to force provisioning. Provisioners marked to run always will still run.
         resume:
           resuming: Resuming suspended VM...
           unpausing: |-
@@ -1712,6 +1824,26 @@ en:
         set_name:
           setting_name: |-
             Setting the name of the VM: %{name}
+        snapshot:
+          deleting: |-
+            Deleting the snapshot '%{name}'...
+          deleted: |-
+            Snapshot deleted!
+          list_none: |-
+            No snapshots have been taken yet!
+          list_none_detail: |-
+            You can take a snapshot using `vagrant snapshot save`. Note that
+            not all providers support this yet. Once a snapshot is taken, you
+            can list them using this command, and use commands such as
+            `vagrant snapshot restore` to go back to a certain snapshot.
+          restoring: |-
+            Restoring the snapshot '%{name}'...
+          saving: |-
+            Snapshotting the machine as '%{name}'...
+          saved: |-
+            Snapshot saved! You can restore the snapshot at any time by
+            using `vagrant snapshot restore`. You can delete it using
+            `vagrant snapshot delete`.
         suspend:
           suspending: Saving VM state and suspending execution...
 
@@ -1749,7 +1881,7 @@ en:
           packaging: "Packaging additional file: %{file}"
           compressing: "Compressing package to: %{tar_path}"
           output_exists: |-
-            The specified file to save the package as already exists. Please
+            The specified file '%{file_name}' to save the package as already exists. Please
             remove this file or specify a different file name for outputting.
           output_is_directory: |-
             The specified output is a directory. Please specify a path including
@@ -1766,6 +1898,21 @@ en:
           Preparing to edit /etc/exports. Administrator privileges will be required...
         nfs_prune: |-
           Pruning invalid NFS exports. Administrator privileges will be required...
+      darwin:
+        virtualbox_install_download: |-
+          Downloading VirtualBox %{version}...
+        virtualbox_install_detail: |-
+          This may not be the latest version of VirtualBox, but it is a version
+          that is known to work well. Over time, we'll update the version that
+          is installed.
+        virtualbox_install_install: |-
+          Installing VirtualBox. This will take a few minutes...
+        virtualbox_install_install_detail: |-
+          You may be asked for your administrator password during this time.
+          If you're uncomfortable entering your password here, please install
+          VirtualBox manually.
+        virtualbox_install_success: |-
+          VirtualBox has successfully been installed!
       linux:
         nfs_export: |-
           Preparing to edit /etc/exports. Administrator privileges will be required...
@@ -1774,6 +1921,22 @@ en:
       arch:
         nfs_export:
           prepare: "Preparing to edit /etc/exports. Administrator privileges will be required..."
+      windows:
+        virtualbox_install_download: |-
+          Downloading VirtualBox %{version}...
+        virtualbox_install_detail: |-
+          This may not be the latest version of VirtualBox, but it is a version
+          that is known to work well. Over time, we'll update the version that
+          is installed.
+        virtualbox_install_install: |-
+          Installing VirtualBox. This will take a few minutes...
+        virtualbox_install_install_detail: |-
+          A couple pop-ups will occur during this installation process to
+          ask for admin privileges as well as to install Oracle drivers.
+          Please say yes to both. If you're uncomfortable with this, please
+          install VirtualBox manually.
+        virtualbox_install_success: |-
+          VirtualBox has successfully been installed!
 
     provisioners:
       chef:
@@ -1785,6 +1948,8 @@ en:
           "The cookbook path '%{path}' doesn't exist. Ignoring..."
         json: "Generating chef JSON and uploading..."
         client_key_folder: "Creating folder to hold client key..."
+        generating_node_name: |-
+          Auto-generating node name for Chef...
         install_failed: |-
           Vagrant could not detect Chef on the guest! Even after Vagrant
           attempted to install Chef, it could still not find Chef on the system.
@@ -1809,8 +1974,8 @@ en:
         running_apply: "Running chef-apply..."
         running_solo: "Running chef-solo..."
         running_solo_again: "Running chef-solo again (failed to converge)..."
-        running_zero: "Running chef-zero..."
-        running_zero_again: "Running chef-zero again (failed to converge)..."
+        running_zero: "Running chef-client (local-mode)..."
+        running_zero_again: "Running chef-client (local-mode) again (failed to converge)..."
         missing_shared_folders: |-
           Shared folders that Chef requires are missing on the virtual machine.
           This is usually due to configuration changing after already booting the
@@ -1838,6 +2003,12 @@ en:
         upload_path_empty: |-
           The Chef Apply provisioner requires that the `config.chef.upload_path`
           be set to a non-nil, non-empty value.
+        missing_node_name: |-
+          The Chef Client provisioner cannot delete the %{deletable} from
+          the Chef server because Vagrant does not know the `node_name'! You
+          need to manually delete the %{deletable} from the Chef server. You
+          can specify the `node_name' in the Chef configuration to prevent this
+          in the future.
         deleting_from_server: "Deleting %{deletable} \"%{name}\" from Chef server..."
 
       file:
@@ -1852,11 +2023,17 @@ en:
           installed on this guest. Puppet provisioning can not continue without
           Puppet properly installed.
         running_puppet: "Running Puppet with %{manifest}..."
+        running_puppet_env: "Running Puppet with environment %{environment}..."
         manifest_missing: |-
           The configured Puppet manifest is missing. Please specify a path to an
           existing manifest:
 
           %{manifest}
+        environment_missing: |-
+          The configured Puppet environment folder %{environment} was not found in the
+          specified environmentpath %{environmentpath}.
+          Please specify a path to an existing Puppet directory environment.
+        environment_path_missing: "The environment path specified for Puppet does not exist: %{path}"
         manifests_path_missing: "The manifests path specified for Puppet does not exist: %{path}"
         missing_shared_folders: |-
           Shared folders that Puppet requires are missing on the virtual machine.
@@ -1888,19 +2065,78 @@ en:
         invalid_encoding: |-
           Invalid encoding '%{actual}' for script at '%{path}'.
           Must be '%{default}' or UTF-8.
+        env_must_be_a_hash: |-
+          The shell provisioner's `env' option must be a hash.
         no_path_or_inline: "One of `path` or `inline` must be set."
         path_and_inline_set: "Only one of `path` or `inline` may be set."
         path_invalid: "`path` for shell provisioner does not exist on the host system: %{path}"
         running: "Running: %{script}"
         runningas: "Running: %{local} as %{remote}"
         upload_path_not_set: "`upload_path` must be set for the shell provisioner."
+        interactive_not_elevated: "To be interactive, it must also be privileged."
 
       ansible:
-        no_playbook: "`playbook` must be set for the Ansible provisioner."
-        playbook_path_invalid: "`playbook` for the Ansible provisioner does not exist on the host system: %{path}"
-        inventory_path_invalid: "`inventory_path` for the Ansible provisioner does not exist on the host system: %{path}"
-        vault_password_file_invalid: "`vault_password_file` for the Ansible provisioner does not exist on the host system: %{path}"
-        extra_vars_invalid: "`extra_vars` for the Ansible provisioner must be a hash or a path to an existing file. Received: %{value} (as %{type})"
+        ansible_host_pattern_detected: |-
+          Vagrant has detected a host range pattern in the `groups` option.
+          Vagrant doesn't fully check the validity of these parameters!
+
+          Please check https://docs.ansible.com/ansible/intro_inventory.html#hosts-and-groups
+          for more information.
+        cannot_detect: |-
+          Vagrant does not support detecting whether Ansible is installed
+          for the guest OS running in the machine. Vagrant will assume it is
+          installed and attempt to continue.
+
+          If you'd like this provisioner to be improved, please
+          take a look at the Vagrant source code linked below and try
+          to contribute back support. Thank you!
+
+          https://github.com/mitchellh/vagrant
+        errors:
+          ansible_command_failed: |-
+            Ansible failed to complete successfully. Any error output should be
+            visible above. Please fix these errors and try again.
+          ansible_not_found_on_guest: |-
+            The Ansible software could not be found! Please verify
+            that Ansible is correctly installed on your guest system.
+
+            If you haven't installed Ansible yet, please install Ansible
+            on your Vagrant basebox, or enable the automated setup with the
+            `install` option of this provisioner. Please check
+            https://docs.vagrantup.com/v2/provisioning/ansible_local.html
+            for more information.
+          ansible_not_found_on_host: |-
+            The Ansible software could not be found! Please verify
+            that Ansible is correctly installed on your host system.
+
+            If you haven't installed Ansible yet, please install Ansible
+            on your host system. Vagrant can't do this for you in a safe and
+            automated way.
+            Please check https://docs.ansible.com for more information.
+          ansible_version_not_found_on_guest: |-
+            The requested Ansible version (%{required_version}) was not found on the guest.
+            Please check the ansible installation on your guest system,
+            or adapt the `version` option of this provisioner in your Vagrantfile.
+            See https://docs.vagrantup.com/v2/provisioning/ansible_local.html
+            for more information.
+          extra_vars_invalid: |-
+            `extra_vars` must be a hash or a path to an existing file. Received: %{value} (as %{type})
+          galaxy_role_file_invalid: |-
+            `galaxy_role_file` does not exist on the %{system}: %{path}
+          inventory_path_invalid: |-
+            `inventory_path` does not exist on the %{system}: %{path}
+          no_playbook: |-
+            `playbook` file path must be set.
+          playbook_path_invalid: |-
+            `playbook` does not exist on the %{system}: %{path}
+          vault_password_file_invalid: |-
+            `vault_password_file` does not exist on the %{system}: %{path}
+        installing: "Installing Ansible..."
+        running_galaxy: "Running ansible-galaxy..."
+        running_playbook: "Running ansible-playbook..."
+        windows_not_supported_for_control_machine: |-
+          Windows is not officially supported for the Ansible Control Machine.
+          Please check https://docs.ansible.com/intro_installation.html#control-machine-requirements
 
       docker:
         not_running: "Docker is not running on the guest VM."
@@ -1908,9 +2144,9 @@ en:
 
       salt:
         minion_config_nonexist: |-
-          The specified minion_config file could not be found.
+          The specified minion_config '%{missing_config_file}' file could not be found.
         master_config_nonexist: |-
-          The specified master_config file could not be found.
+          The specified master_config '%{missing_config_file}' file could not be found.
         grains_config_nonexist: |-
           The specified grains_config file could not be found.
         missing_key: |-

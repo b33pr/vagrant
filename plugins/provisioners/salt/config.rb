@@ -4,6 +4,10 @@ require "vagrant/util/deep_merge"
 module VagrantPlugins
   module Salt
     class Config < Vagrant.plugin("2", :config)
+      ## @deprecated
+      def config_dir=(value)
+        puts "salt config_dir is deprecated and will be removed in Vagrant 1.9"
+      end
 
       ## salty-vagrant options
       attr_accessor :minion_config
@@ -15,6 +19,7 @@ module VagrantPlugins
       attr_accessor :grains_config
       attr_accessor :run_highstate
       attr_accessor :run_overstate
+      attr_accessor :orchestrations
       attr_accessor :always_install
       attr_accessor :bootstrap_script
       attr_accessor :verbose
@@ -22,6 +27,8 @@ module VagrantPlugins
       attr_reader   :pillar_data
       attr_accessor :colorize
       attr_accessor :log_level
+      attr_accessor :masterless
+      attr_accessor :minion_id
 
       ## bootstrap options
       attr_accessor :temp_config_dir
@@ -31,6 +38,9 @@ module VagrantPlugins
       attr_accessor :install_syndic
       attr_accessor :no_minion
       attr_accessor :bootstrap_options
+      attr_accessor :version
+      attr_accessor :run_service
+      attr_accessor :master_id
 
       def initialize
         @minion_config = UNSET_VALUE
@@ -56,6 +66,11 @@ module VagrantPlugins
         @install_syndic = UNSET_VALUE
         @no_minion = UNSET_VALUE
         @bootstrap_options = UNSET_VALUE
+        @masterless = UNSET_VALUE
+        @minion_id = UNSET_VALUE
+        @version = UNSET_VALUE
+        @run_service = UNSET_VALUE
+        @master_id = UNSET_VALUE
       end
 
       def finalize!
@@ -82,7 +97,11 @@ module VagrantPlugins
         @install_syndic     = nil if @install_syndic == UNSET_VALUE
         @no_minion          = nil if @no_minion == UNSET_VALUE
         @bootstrap_options  = nil if @bootstrap_options == UNSET_VALUE
-
+        @masterless         = false if @masterless == UNSET_VALUE
+        @minion_id          = nil if @minion_id == UNSET_VALUE
+        @version            = nil if @version == UNSET_VALUE
+        @run_service        = nil if @run_service == UNSET_VALUE
+        @master_id          = nil if @master_id == UNSET_VALUE
       end
 
       def pillar(data)
@@ -95,14 +114,14 @@ module VagrantPlugins
         if @minion_config
           expanded = Pathname.new(@minion_config).expand_path(machine.env.root_path)
           if !expanded.file?
-            errors << I18n.t("vagrant.provisioners.salt.minion_config_nonexist")
+            errors << I18n.t("vagrant.provisioners.salt.minion_config_nonexist", missing_config_file: expanded)
           end
         end
 
         if @master_config
           expanded = Pathname.new(@master_config).expand_path(machine.env.root_path)
           if !expanded.file?
-            errors << I18n.t("vagrant.provisioners.salt.master_config_nonexist")
+            errors << I18n.t("vagrant.provisioners.salt.master_config_nonexist",  missing_config_file: expanded)
           end
         end
 
@@ -131,8 +150,6 @@ module VagrantPlugins
 
         return {"salt provisioner" => errors}
       end
-
-
     end
   end
 end

@@ -19,6 +19,7 @@ module VagrantPlugins
 
         attr_reader :environments_folders
         attr_reader :cookbook_folders
+        attr_reader :node_folders
         attr_reader :role_folders
         attr_reader :data_bags_folders
 
@@ -33,15 +34,17 @@ module VagrantPlugins
           @role_folders      = expanded_folders(@config.roles_path, "roles")
           @data_bags_folders = expanded_folders(@config.data_bags_path, "data_bags")
           @environments_folders = expanded_folders(@config.environments_path, "environments")
+          @node_folders = expanded_folders(@config.nodes_path, "nodes")
 
           existing = synced_folders(@machine, cached: true)
           share_folders(root_config, "csc", @cookbook_folders, existing)
           share_folders(root_config, "csr", @role_folders, existing)
           share_folders(root_config, "csdb", @data_bags_folders, existing)
           share_folders(root_config, "cse", @environments_folders, existing)
+          share_folders(root_config, "csn", @node_folders, existing)
         end
 
-        def provision(mode = :solo)
+        def provision
           install_chef
           # Verify that the proper shared folders exist.
           check = []
@@ -58,7 +61,7 @@ module VagrantPlugins
           upload_encrypted_data_bag_secret
           setup_json
           setup_solo_config
-          run_chef(mode)
+          run_chef_solo
           delete_encrypted_data_bag_secret
         end
 
@@ -82,7 +85,7 @@ module VagrantPlugins
                 # Path exists on the host, setup the remote path. We use
                 # the MD5 of the local path so that it is predictable.
                 key         = Digest::MD5.hexdigest(local_path)
-                remote_path = "#{@config.provisioning_path}/#{key}"
+                remote_path = "#{guest_provisioning_path}/#{key}"
               else
                 @machine.ui.warn(I18n.t("vagrant.provisioners.chef.cookbook_folder_not_found_warning",
                                        path: local_path.to_s))
@@ -91,7 +94,7 @@ module VagrantPlugins
             else
               # Path already exists on the virtual machine. Expand it
               # relative to where we're provisioning.
-              remote_path = File.expand_path(path, @config.provisioning_path)
+              remote_path = File.expand_path(path, guest_provisioning_path)
 
               # Remove drive letter if running on a windows host. This is a bit
               # of a hack but is the most portable way I can think of at the moment
@@ -101,7 +104,9 @@ module VagrantPlugins
             end
 
             # If we have specified a folder name to append then append it
-            remote_path += "/#{appended_folder}" if appended_folder
+            if type == :host
+              remote_path += "/#{appended_folder}" if appended_folder
+            end
 
             # Append the result
             results << [type, local_path, remote_path]
@@ -125,13 +130,23 @@ module VagrantPlugins
 
             # If this folder already exists, then we don't share it, it means
             # it was already put down on disk.
+            #
+            # NOTE: This is currently commented out because it was causing
+            # major bugs (GH-5199). We will investigate why this is in more
+            # detail for 1.8.0, but we wanted to fix this in a patch release
+            # and this was the hammer that did that.
+=begin
             if existing_set.include?(remote_path)
               @logger.debug("Not sharing #{local_path}, exists as #{remote_path}")
               next
             end
+=end
+
+            key = Digest::MD5.hexdigest(remote_path)
+            key = key[0..8]
 
             opts = {}
-            opts[:id] = "v-#{prefix}-#{self.class.get_and_update_counter(:shared_folder)}"
+            opts[:id] = "v-#{prefix}-#{key}"
             opts[:type] = @config.synced_folder_type if @config.synced_folder_type
 
             root_config.vm.synced_folder(local_path, remote_path, opts)
@@ -148,13 +163,14 @@ module VagrantPlugins
           {
             cookbooks_path: guest_paths(@cookbook_folders),
             recipe_url: @config.recipe_url,
+            nodes_path: guest_paths(@node_folders),
             roles_path: guest_paths(@role_folders),
-            data_bags_path: guest_paths(@data_bags_folders).first,
+            data_bags_path: guest_paths(@data_bags_folders),
             environments_path: guest_paths(@environments_folders).first
           }
         end
 
-        def run_chef(mode)
+        def run_chef_solo
           if @config.run_list && @config.run_list.empty?
             @machine.ui.warn(I18n.t("vagrant.chef_run_list_empty"))
           end
@@ -163,13 +179,16 @@ module VagrantPlugins
             @machine.guest.capability(:wait_for_reboot)
           end
 
-          command = build_command(:solo)
+          command = CommandBuilder.command(:solo, @config,
+            windows: windows?,
+            colored: @machine.env.ui.color?,
+          )
 
           @config.attempts.times do |attempt|
             if attempt == 0
-              @machine.ui.info I18n.t("vagrant.provisioners.chef.running_#{mode}")
+              @machine.ui.info I18n.t("vagrant.provisioners.chef.running_solo")
             else
-              @machine.ui.info I18n.t("vagrant.provisioners.chef.running_#{mode}_again")
+              @machine.ui.info I18n.t("vagrant.provisioners.chef.running_solo_again")
             end
 
             opts = { error_check: false, elevated: true }

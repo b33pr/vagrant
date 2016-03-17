@@ -5,6 +5,15 @@ module VagrantPlugins
     class Provider < Vagrant.plugin("2", :provider)
       attr_reader :driver
 
+      def self.installed?
+        Driver::Meta.new
+        true
+      rescue Vagrant::Errors::VirtualBoxInvalidVersion
+        return false
+      rescue Vagrant::Errors::VirtualBoxNotDetected
+        return false
+      end
+
       def self.usable?(raise_error=false)
         # Instantiate the driver, which will determine the VirtualBox
         # version and all that, which checks for VirtualBox being present
@@ -73,6 +82,15 @@ module VagrantPlugins
       #
       # @return [Symbol]
       def state
+        # We have to check if the UID matches to avoid issues with
+        # VirtualBox.
+        uid = @machine.uid
+        if uid && uid.to_s != Process.uid.to_s
+          raise Vagrant::Errors::VirtualBoxUserMismatch,
+            original_uid: uid.to_s,
+            uid: Process.uid.to_s
+        end
+
         # Determine the ID of the state here.
         state_id = nil
         state_id = :not_created if !@driver.uuid

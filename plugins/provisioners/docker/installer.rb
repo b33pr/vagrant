@@ -1,9 +1,8 @@
 module VagrantPlugins
   module DockerProvisioner
     class Installer
-      def initialize(machine, version)
+      def initialize(machine)
         @machine = machine
-        @version = version
       end
 
       # This handles verifying the Docker installation, installing it if it was
@@ -16,19 +15,12 @@ module VagrantPlugins
         end
 
         if !@machine.guest.capability(:docker_installed)
-          @machine.ui.detail(I18n.t("vagrant.docker_installing", version: @version.to_s))
-          @machine.guest.capability(:docker_install, @version)
-
-          if !@machine.guest.capability(:docker_installed)
-            raise DockerError, :install_failed
-          end
+          @machine.ui.detail(I18n.t("vagrant.docker_installing"))
+          @machine.guest.capability(:docker_install)
         end
 
-        if @machine.guest.capability?(:docker_configure_auto_start)
-          @machine.ui.detail(I18n.t("vagrant.docker_configure_autostart"))
-          @machine.guest.capability(:docker_configure_auto_start)
-        else
-          @machine.env.ui.warn I18n.t('vagrant.docker_auto_start_not_available')
+        if !@machine.guest.capability(:docker_installed)
+          raise DockerError, :install_failed
         end
 
         if @machine.guest.capability?(:docker_configure_vagrant_user)

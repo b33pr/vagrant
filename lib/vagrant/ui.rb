@@ -21,9 +21,22 @@ module Vagrant
       # specific. See the implementation for more docs.
       attr_accessor :opts
 
+      # @return [IO] UI input. Defaults to `$stdin`.
+      attr_accessor :stdin
+
+      # @return [IO] UI output. Defaults to `$stdout`.
+      attr_accessor :stdout
+
+      # @return [IO] UI error output. Defaults to `$stderr`.
+      attr_accessor :stderr
+
       def initialize
         @logger   = Log4r::Logger.new("vagrant::ui::interface")
         @opts     = {}
+
+        @stdin  = $stdin
+        @stdout = $stdout
+        @stderr = $stderr
       end
 
       def initialize_copy(original)
@@ -48,6 +61,11 @@ module Vagrant
       [:clear_line, :report_progress].each do |method|
         # By default do nothing, these aren't logged
         define_method(method) { |*args| }
+      end
+
+      # @return [false]
+      def color?
+        return false
       end
 
       # For machine-readable output.
@@ -85,6 +103,12 @@ module Vagrant
         raise Errors::UIExpectsTTY
       end
 
+      [:detail, :warn, :error, :info, :output, :success].each do |method|
+        define_method(method) do |message, *args, **opts|
+          machine("ui", method.to_s, message, *args, **opts)
+        end
+      end
+
       def machine(type, *data)
         opts = {}
         opts = data.pop if data.last.kind_of?(Hash)
@@ -99,9 +123,12 @@ module Vagrant
           data[i].gsub!("\r", "\\r")
         end
 
-        @lock.synchronize do
-          safe_puts("#{Time.now.utc.to_i},#{target},#{type},#{data.join(",")}")
-        end
+        # Avoid locks in a trap context introduced from Ruby 2.0
+        Thread.new do
+          @lock.synchronize do
+            safe_puts("#{Time.now.utc.to_i},#{target},#{type},#{data.join(",")}")
+          end
+        end.join
       end
     end
 
@@ -132,7 +159,7 @@ module Vagrant
         super(message)
 
         # We can't ask questions when the output isn't a TTY.
-        raise Errors::UIExpectsTTY if !$stdin.tty? && !Vagrant::Util::Platform.cygwin?
+        raise Errors::UIExpectsTTY if !@stdin.tty? && !Vagrant::Util::Platform.windows?
 
         # Setup the options so that the new line is suppressed
         opts ||= {}
@@ -144,11 +171,11 @@ module Vagrant
         say(:info, message, opts)
 
         input = nil
-        if opts[:echo]
-          input = $stdin.gets
+        if opts[:echo] || !@stdin.respond_to?(:noecho)
+          input = @stdin.gets
         else
           begin
-            input = $stdin.noecho(&:gets)
+            input = @stdin.noecho(&:gets)
 
             # Output a newline because without echo, the newline isn't
             # echoed either.
@@ -185,7 +212,7 @@ module Vagrant
       end
 
       def clear_line
-        # See: http://en.wikipedia.org/wiki/ANSI_escape_code
+        # See: https://en.wikipedia.org/wiki/ANSI_escape_code
         reset = "\r\033[K"
 
         info(reset, new_line: false)
@@ -206,7 +233,7 @@ module Vagrant
 
         # Determine the proper IO channel to send this message
         # to based on the type of the message
-        channel = type == :error || opts[:channel] == :error ? $stderr : $stdout
+        channel = type == :error || opts[:channel] == :error ? @stderr : @stdout
 
         # Output! We wrap this in a lock so that it safely outputs only
         # one line at a time. We wrap this in a thread because as of Ruby 2.0
@@ -253,6 +280,9 @@ module Vagrant
               opts[:bold] = #{method.inspect} != :detail && \
                 #{method.inspect} != :ask
             end
+            if !opts.key?(:target)
+              opts[:target] = @prefix
+            end
             @ui.#{method}(format_message(#{method.inspect}, message, **opts), *args, **opts)
           end
         CODE
@@ -295,6 +325,7 @@ module Vagrant
 
         target = @prefix
         target = opts[:target] if opts.key?(:target)
+        target = "#{target}:" if target != ""
 
         # Get the lines. The first default is because if the message
         # is an empty string, then we want to still use the empty string.
@@ -303,7 +334,7 @@ module Vagrant
 
         # Otherwise, make sure to prefix every line properly
         lines.map do |line|
-          "#{prefix}#{target}: #{line}"
+          "#{prefix}#{target} #{line}"
         end.join("\n")
       end
     end
@@ -322,6 +353,11 @@ module Vagrant
         cyan:    36,
         white:   37,
       }
+
+      # @return [true]
+      def color?
+        return true
+      end
 
       # This is called by `say` to format the message for output.
       def format_message(type, message, **opts)

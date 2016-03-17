@@ -141,7 +141,7 @@ module VagrantPlugins
           Vagrant::Util::Busy.busy(callback) do
             listener.start
             queue.pop
-            listener.stop if listener.listen?
+            listener.stop if listener.state != :stopped
           end
 
           0
@@ -185,12 +185,19 @@ module VagrantPlugins
 
               ssh_info = opts[:machine].ssh_info
               begin
+                start = Time.now
                 RsyncHelper.rsync_single(opts[:machine], ssh_info, opts[:opts])
+                finish = Time.now
+                @logger.info("Time spent in rsync: #{finish-start} (in seconds)")
               rescue Vagrant::Errors::MachineGuestNotReady
                 # Error communicating to the machine, probably a reload or
                 # halt is happening. Just notify the user but don't fail out.
                 opts[:machine].ui.error(I18n.t(
                   "vagrant.rsync_communicator_not_ready_callback"))
+              rescue Vagrant::Errors::RSyncError => e
+                # Error executing rsync, so show an error
+                opts[:machine].ui.error(I18n.t(
+                  "vagrant.rsync_auto_rsync_error", message: e.to_s))
               end
             end
           end

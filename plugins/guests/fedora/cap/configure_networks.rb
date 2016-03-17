@@ -16,16 +16,20 @@ module VagrantPlugins
 
           virtual = false
           interface_names = Array.new
-          machine.communicate.sudo("/usr/sbin/biosdevname; echo $?") do |_, result|
-            virtual = true if result.chomp == '4'
+          interface_names_by_slot = Array.new
+          machine.communicate.sudo("/usr/sbin/biosdevname &>/dev/null; echo $?") do |_, result|
+            # The above command returns:
+            #   - '4' if /usr/sbin/biosdevname detects it is running in a virtual machine
+            #   - '127' if /usr/sbin/biosdevname doesn't exist
+            virtual = true if ['4', '127'].include? result.chomp
           end
 
           if virtual
-            machine.communicate.sudo("ls /sys/class/net | grep -v lo") do |_, result|
+            machine.communicate.sudo("ls -v /sys/class/net | egrep -v lo\\|docker") do |_, result|
               interface_names = result.split("\n")
             end
 
-            interface_names = networks.map do |network|
+            interface_names_by_slot = networks.map do |network|
                "#{interface_names[network[:interface]]}"
             end
           else
@@ -44,10 +48,19 @@ module VagrantPlugins
                "eth#{network[:interface]}"
             end
 
+            interface_names_by_slot = interface_names.dup
             interface_name_pairs.each do |interface_name, previous_interface_name|
               if setting_interface_names.index(previous_interface_name) == nil
-                interface_names.delete(interface_name)
+                interface_names_by_slot.delete(interface_name)
               end
+            end
+          end
+
+          # Read interface MAC addresses for later matching
+          mac_addresses = Array.new(interface_names.length)
+          interface_names.each_with_index do |ifname, index|
+            machine.communicate.sudo("cat /sys/class/net/#{ifname}/address") do |_, result|
+              mac_addresses[index] = result.strip
             end
           end
 
@@ -55,7 +68,19 @@ module VagrantPlugins
           # as what interfaces we're actually configuring since we use that later.
           interfaces = Set.new
           networks.each do |network|
-            interface = interface_names[network[:interface]-1]
+            interface = nil
+            if network[:mac_address]
+              found_idx = mac_addresses.find_index(network[:mac_address])
+              # Ignore network if requested MAC address could not be found
+              next if found_idx.nil?
+              interface = interface_names[found_idx]
+            else
+              ifname_by_slot = interface_names_by_slot[network[:interface]-1]
+              # Don't overwrite if interface was already matched via MAC address
+              next if interfaces.include?(ifname_by_slot)
+              interface = ifname_by_slot
+            end
+
             interfaces.add(interface)
             network[:device] = interface
 
@@ -84,12 +109,23 @@ module VagrantPlugins
           # SSH never dies.
           interfaces.each do |interface|
             retryable(on: Vagrant::Errors::VagrantError, tries: 3, sleep: 2) do
-              machine.communicate.sudo("cat /tmp/vagrant-network-entry_#{interface} >> #{network_scripts_dir}/ifcfg-#{interface}")
-              machine.communicate.sudo("/sbin/ifdown #{interface}", error_check: true)
-              machine.communicate.sudo("/sbin/ifup #{interface}")
-            end
+              machine.communicate.sudo(<<-SCRIPT, error_check: true)
+cat /tmp/vagrant-network-entry_#{interface} >> #{network_scripts_dir}/ifcfg-#{interface}
 
-            machine.communicate.sudo("rm -f /tmp/vagrant-network-entry_#{interface}")
+if command -v nmcli &>/dev/null; then
+  if command -v systemctl &>/dev/null && systemctl -q is-enabled NetworkManager &>/dev/null; then
+    nmcli c reload #{interface}
+  elif command -v service &>/dev/null && service NetworkManager status &>/dev/null; then
+    nmcli c reload #{interface}
+  fi
+fi
+
+/sbin/ifdown #{interface}
+/sbin/ifup #{interface}
+
+rm -f /tmp/vagrant-network-entry_#{interface}
+SCRIPT
+            end
           end
         end
       end

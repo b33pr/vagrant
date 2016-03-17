@@ -19,7 +19,7 @@ module VagrantPlugins
           cpus = env[:machine].provider_config.cpus
           vmname = env[:machine].provider_config.vmname
 
-          env[:ui].output("Configured Dynamical memory allocation, maxmemory is #{maxmemory}") if maxmemory
+          env[:ui].output("Configured Dynamic memory allocation, maxmemory is #{maxmemory}") if maxmemory
           env[:ui].output("Configured startup memory is #{memory}") if memory
           env[:ui].output("Configured cpus number is #{cpus}") if cpus
           env[:ui].output("Configured vmname is #{vmname}") if vmname
@@ -38,10 +38,12 @@ module VagrantPlugins
 
           image_path = nil
           image_ext = nil
+          image_filename = nil
           hd_dir.each_child do |f|
             if %w{.vhd .vhdx}.include?(f.extname.downcase)
               image_path = f
               image_ext = f.extname.downcase
+              image_filename = File.basename(f,image_ext)
               break
             end
           end
@@ -52,9 +54,47 @@ module VagrantPlugins
 
           env[:ui].output("Importing a Hyper-V instance")
 
+          switches = env[:machine].provider.driver.execute("get_switches.ps1", {})
+          raise Errors::NoSwitches if switches.empty?
+
+          switch = nil
+          env[:machine].config.vm.networks.each do |type, opts|
+            next if type != :public_network && type != :private_network
+
+            switchToFind = opts[:bridge]
+
+            if switchToFind
+              puts "Looking for switch with name: #{switchToFind}"
+              switch = switches.find { |s| s["Name"].downcase == switchToFind.downcase }["Name"]
+              puts "Found switch: #{switch}"
+            end
+          end
+
+          if switch.nil?
+            if switches.length > 1
+              env[:ui].detail(I18n.t("vagrant_hyperv.choose_switch") + "\n ")
+              switches.each_index do |i|
+                switch = switches[i]
+                env[:ui].detail("#{i+1}) #{switch["Name"]}")
+              end
+              env[:ui].detail(" ")
+
+              switch = nil
+              while !switch
+                switch = env[:ui].ask("What switch would you like to use? ")
+                next if !switch
+                switch = switch.to_i - 1
+                switch = nil if switch < 0 || switch >= switches.length
+              end
+              switch = switches[switch]["Name"]
+            else
+              switch = switches[0]["Name"]
+            end
+          end
+
           env[:ui].detail("Cloning virtual hard drive...")
           source_path = image_path.to_s
-          dest_path   = env[:machine].data_dir.join("disk#{image_ext}").to_s
+          dest_path   = env[:machine].data_dir.join("#{image_filename}#{image_ext}").to_s
           FileUtils.cp(source_path, dest_path)
           image_path = dest_path
           generation = env[:machine].provider_config.generation.to_s
@@ -66,11 +106,11 @@ module VagrantPlugins
             image_path:      image_path.to_s.gsub("/", "\\"),
             generation: generation
           }
-          
+
           options[:memory] = memory if memory 
           options[:maxmemory] = maxmemory if maxmemory
           options[:cpus] = cpus if cpus
-          options[:vmname] = vmname if vmname 
+          options[:vmname] = vmname if vmname
 
           env[:ui].detail("Creating and registering the VM...")
           server = env[:machine].provider.driver.import(options)

@@ -25,6 +25,15 @@ module Vagrant
           # Order the plugins by priority. Higher is tried before lower.
           ordered = ordered.sort { |a, b| b[0] <=> a[0] }
 
+          allowed_types = machine.config.vm.allowed_synced_folder_types
+          if allowed_types
+            ordered = allowed_types.map do |type|
+              ordered.find do |_, key, impl|
+                key == type
+              end
+            end.compact
+          end
+
           # Find the proper implementation
           ordered.each do |_, key, impl|
             return key if impl.new.usable?(machine)
@@ -67,6 +76,16 @@ module Vagrant
           if opts[:merge]
             existing = cached_synced_folders(machine)
             if existing
+              if opts[:vagrantfile]
+                # Go through and find any cached that were from the
+                # Vagrantfile itself. We remove those if it was requested.
+                existing.each do |impl, fs|
+                  fs.each do |id, data|
+                    fs.delete(id) if data[:__vagrantfile]
+                  end
+                end
+              end
+
               folders.each do |impl, fs|
                 existing[impl] ||= {}
                 fs.each do |id, data|
@@ -92,7 +111,12 @@ module Vagrant
           return cached_synced_folders(machine) if opts[:cached]
 
           config = opts[:config]
-          config ||= machine.config.vm
+          root   = false
+          if !config
+            config = machine.config.vm
+            root   = true
+          end
+
           config_folders = config.synced_folders
           folders = {}
 
@@ -122,9 +146,17 @@ module Vagrant
               end
             end
 
+            # Get the data to store
+            data = data.dup
+            if root
+              # If these are the root synced folders (attached directly)
+              # to the Vagrantfile, then we mark it as such.
+              data[:__vagrantfile] = true
+            end
+
             # Keep track of this shared folder by the implementation.
             folders[impl] ||= {}
-            folders[impl][id] = data.dup
+            folders[impl][id] = data
           end
 
           # If we have folders with the "default" key, then determine the

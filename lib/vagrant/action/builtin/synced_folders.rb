@@ -23,6 +23,7 @@ module Vagrant
             config: env[:synced_folders_config],
           }
 
+          @logger.info("SyncedFolders loading from cache: #{opts[:cached]}")
           folders = synced_folders(env[:machine], **opts)
           original_folders = folders
 
@@ -76,8 +77,10 @@ module Vagrant
 
           # Go through each folder and prepare the folders
           folders.each do |impl, impl_name, fs|
-            @logger.info("Invoking synced folder prepare for: #{impl_name}")
-            impl.prepare(env[:machine], fs, impl_opts(impl_name, env))
+            if !env[:synced_folders_disable]
+              @logger.info("Invoking synced folder prepare for: #{impl_name}")
+              impl.prepare(env[:machine], fs, impl_opts(impl_name, env))
+            end
           end
 
           # Continue, we need the VM to be booted.
@@ -119,8 +122,11 @@ module Vagrant
 
             save_synced_folders(env[:machine], all)
           else
+            save_opts = { merge: true }
+            save_opts[:vagrantfile] = true if !opts[:config]
+
             # Save the synced folders
-            save_synced_folders(env[:machine], original_folders, merge: true)
+            save_synced_folders(env[:machine], original_folders, **save_opts)
           end
         end
       end
